@@ -1,0 +1,16 @@
+{
+  "sections": {
+    "main": {
+      "type": "hello-world",
+      "settings": {}
+    },
+    "storefront-demo": {
+      "type": "storefront",
+      "settings": {}
+    }
+  },
+  "order": [
+    "main",
+    "storefront-demo"
+  ]
+}

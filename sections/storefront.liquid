@@ -1,0 +1,246 @@
+{% comment %}
+API Demo Section
+This section demonstrates how to integrate Shopify's Storefront API
+with a theme section for dynamic content loading.
+{% endcomment %}
+
+<div class="api-demo" data-shop-domain="{{ shop.permanent_domain }}" data-access-token="{{ settings.storefront_access_token }}"> <h2>Dynamic Product Loading Demo</h2> <div class="api-demo__controls"> <button class="api-demo__button" data-action="load-products">Load Products</button> <button class="api-demo__button" data-action="load-collections">Load Collections</button> <input type="text" class="api-demo__search" placeholder="Search products..." data-action="search"> </div> <div class="api-demo__loading" style="display: none;"> <p>Loading...</p> </div> <div class="api-demo__results"> <!-- Results will be populated by JavaScript --> </div> <div class="api-demo__error" style="display: none;"> <p>Error loading data. Please try again.</p> </div> </div>
+{% stylesheet %}
+.api-demo {
+padding: 2rem;
+max-width: 1200px;
+margin: 0 auto;
+}
+
+.api-demo__controls {
+display: flex;
+gap: 1rem;
+margin-bottom: 2rem;
+flex-wrap: wrap;
+}
+
+.api-demo__button {
+padding: 0.5rem 1rem;
+background: #007cba;
+color: white;
+border: none;
+border-radius: 4px;
+cursor: pointer;
+font-size: 1rem;
+}
+
+.api-demo__button:hover {
+background: #005a87;
+}
+
+.api-demo__search {
+padding: 0.5rem;
+border: 1px solid #ccc;
+border-radius: 4px;
+font-size: 1rem;
+min-width: 200px;
+}
+
+.api-demo__results {
+display: grid;
+grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+gap: 1rem;
+}
+
+.api-demo__product {
+border: 1px solid #eee;
+border-radius: 8px;
+padding: 1rem;
+text-align: center;
+}
+
+.api-demo__product img {
+max-width: 100%;
+height: auto;
+border-radius: 4px;
+}
+
+.api-demo__loading,
+.api-demo__error {
+text-align: center;
+padding: 2rem;
+color: #666;
+}
+
+.api-demo__error {
+color: #d32f2f;
+}
+{% endstylesheet %}
+
+{% javascript %}
+import ShopifyStorefrontAPI from '{{ "storefront-api.js" | asset_url }}';
+
+class APIDemo {
+constructor() {
+this.container = document.querySelector('.api-demo');
+this.resultsContainer = this.container.querySelector('.api-demo__results');
+this.loadingElement = this.container.querySelector('.api-demo__loading');
+this.errorElement = this.container.querySelector('.api-demo__error');
+
+this.shopDomain = this.container.dataset.shopDomain;
+this.accessToken = this.container.dataset.accessToken;
+
+// Initialize API client
+this.api = new ShopifyStorefrontAPI(this.shopDomain, this.accessToken);
+
+this.bindEvents();
+}
+
+bindEvents() {
+// Load products button
+const loadProductsBtn = this.container.querySelector('[data-action="load-products"]');
+if (loadProductsBtn) {
+loadProductsBtn.addEventListener('click', () => this.loadProducts());
+}
+
+// Load collections button
+const loadCollectionsBtn = this.container.querySelector('[data-action="load-collections"]');
+if (loadCollectionsBtn) {
+loadCollectionsBtn.addEventListener('click', () => this.loadCollections());
+}
+
+// Search input
+const searchInput = this.container.querySelector('[data-action="search"]');
+if (searchInput) {
+searchInput.addEventListener('input', this.debounce(() => this.searchProducts(searchInput.value), 500));
+}
+}
+
+async loadProducts() {
+this.showLoading();
+this.hideError();
+
+try {
+const response = await this.api.getProducts(12);
+this.displayProducts(response.data.products.edges);
+} catch (error) {
+console.error('Error loading products:', error);
+this.showError();
+} finally {
+this.hideLoading();
+}
+}
+
+async loadCollections() {
+this.showLoading();
+this.hideError();
+
+try {
+const response = await this.api.getCollections(6);
+this.displayCollections(response.data.collections.edges);
+} catch (error) {
+console.error('Error loading collections:', error);
+this.showError();
+} finally {
+this.hideLoading();
+}
+}
+
+async searchProducts(query) {
+if (!query.trim()) {
+this.resultsContainer.innerHTML = '';
+return;
+}
+
+this.showLoading();
+this.hideError();
+
+try {
+const response = await this.api.searchProducts(query, 8);
+this.displayProducts(response.data.products.edges);
+} catch (error) {
+console.error('Error searching products:', error);
+this.showError();
+} finally {
+this.hideLoading();
+}
+}
+
+displayProducts(products) {
+this.resultsContainer.innerHTML = products.map(({ node: product }) => `
+<div class="api-demo__product">
+${product.images.edges.length > 0
+? `<img src="${product.images.edges[0].node.url}" alt="${product.images.edges[0].node.altText || product.title}">`
+: '<div style="height: 200px; background: #f5f5f5; display: flex; align-items: center; justify-content: center;">No Image</div>'
+}
+<h3>${product.title}</h3>
+<p>${product.priceRange.minVariantPrice.amount} ${product.priceRange.minVariantPrice.currencyCode}</p>
+<a href="/products/${product.handle}" class="api-demo__button">View Product</a>
+</div>
+`).join('');
+}
+
+displayCollections(collections) {
+this.resultsContainer.innerHTML = collections.map(({ node: collection }) => `
+<div class="api-demo__product">
+${collection.image
+? `<img src="${collection.image.url}" alt="${collection.image.altText || collection.title}">`
+: '<div style="height: 200px; background: #f5f5f5; display: flex; align-items: center; justify-content: center;">No Image</div>'
+}
+<h3>${collection.title}</h3>
+<p>${collection.description || 'No description available'}</p>
+<a href="/collections/${collection.handle}" class="api-demo__button">View Collection</a>
+</div>
+`).join('');
+}
+
+showLoading() {
+this.loadingElement.style.display = 'block';
+}
+
+hideLoading() {
+this.loadingElement.style.display = 'none';
+}
+
+showError() {
+this.errorElement.style.display = 'block';
+}
+
+hideError() {
+this.errorElement.style.display = 'none';
+}
+
+debounce(func, wait) {
+let timeout;
+return function executedFunction(...args) {
+const later = () => {
+clearTimeout(timeout);
+func(...args);
+};
+clearTimeout(timeout);
+timeout = setTimeout(later, wait);
+};
+}
+}
+
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+document.addEventListener('DOMContentLoaded', () => new APIDemo());
+} else {
+new APIDemo();
+}
+{% endjavascript %}
+
+{% schema %}
+{
+"name": "API Demo",
+"settings": [
+{
+"type": "text",
+"id": "storefront_access_token",
+"label": "Storefront Access Token",
+"info": "Enter your Storefront API access token. You can create one in your Shopify admin under Apps > App and sales channel settings > Storefront API."
+}
+],
+"presets": [
+{
+"name": "API Demo"
+}
+]
+}
+{% endschema %}
